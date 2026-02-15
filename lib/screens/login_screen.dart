@@ -5,122 +5,136 @@ class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  LoginScreenState createState() => LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  // Controllers for the standard Login form
-  final _phoneController = TextEditingController();
+class LoginScreenState extends State<LoginScreen> {
+  bool isSignUp = false;
+  bool isLoading = false;
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final AuthService _authService = AuthService();
 
-  // Unified login handler
-  void _handleLogin() async {
+  void _handleAuth() async {
+    setState(() => isLoading = true);
     try {
-      await _authService.signIn(_phoneController.text, _passwordController.text);
-
-      // Move to Home Screen if successful
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
+      if (isSignUp) {
+        await _authService.signUp(_emailController.text, _passwordController.text);
+      } else {
+        await _authService.signIn(_emailController.text, _passwordController.text);
       }
+      if (mounted) Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Login Failed: ${e.toString()}")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
-  // Helper method to build consistent social buttons
-  Widget _socialButton({required String text, required IconData icon, required Color color, required VoidCallback onTap}) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        icon: Icon(icon, color: Colors.white),
-        label: Text(text, style: const TextStyle(color: Colors.white)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        onPressed: onTap,
-      ),
-    );
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => isLoading = true);
+    try {
+      final user = await _authService.signInWithGoogle();
+      if (user != null && mounted) {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Google Sign-In Failed: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    const primaryBlue = Colors.blueAccent;
+    const buttonTextColor = Colors.white;
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Welcome to MovieApp")),
-      body: SingleChildScrollView( // Prevents layout issues when keyboard pops up
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          children: [
-            const Text("Sign In Options", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-
-            // Social Buttons
-            _socialButton(
-              text: "Continue with Google",
-              icon: Icons.g_mobiledata,
-              color: Colors.redAccent,
-              onTap: () => print("Google Sign-In Triggered"),
-            ),
-            const SizedBox(height: 12),
-            _socialButton(
-              text: "Continue with Email",
-              icon: Icons.email_outlined,
-              color: Colors.blueAccent,
-              onTap: () => print("Email Flow Triggered"),
-            ),
-
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Row(
-                children: [
-                  Expanded(child: Divider()),
-                  Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Text("OR LOGIN")),
-                  Expanded(child: Divider()),
-                ],
-              ),
-            ),
-
-            // Old User / Phone Login Form
-            TextField(
-              controller: _phoneController,
-              decoration: const InputDecoration(
-                labelText: "Phone Number",
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.phone),
-              ),
-              keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _passwordController,
-              decoration: const InputDecoration(
-                labelText: "Password",
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.lock),
-              ),
-              obscureText: true,
-            ),
-            const SizedBox(height: 24),
-
-            // Main Login Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+      backgroundColor: Colors.white,
+      body: Center(
+        child: isLoading
+            ? const CircularProgressIndicator()
+            : SingleChildScrollView(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  children: [
+                    const CircleAvatar(
+                      radius: 50,
+                      backgroundColor: primaryBlue,
+                      child: Text("LOGO", style: TextStyle(color: Colors.white)),
+                    ),
+                    const SizedBox(height: 30),
+                    Text(isSignUp ? "Create an Account" : "Login",
+                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black)),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: _emailController,
+                      style: const TextStyle(color: Colors.black),
+                      decoration: const InputDecoration(
+                        labelText: "Email / Phone",
+                        labelStyle: TextStyle(color: Colors.black54),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    TextField(
+                      controller: _passwordController,
+                      obscureText: true,
+                      style: const TextStyle(color: Colors.black),
+                      decoration: const InputDecoration(
+                        labelText: "Password",
+                        labelStyle: TextStyle(color: Colors.black54),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: () => setState(() => isSignUp = !isSignUp),
+                        child: Text(isSignUp ? "Already a user? Login" : "new?",
+                            style: const TextStyle(color: primaryBlue)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryBlue,
+                          foregroundColor: buttonTextColor,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        onPressed: _handleAuth,
+                        child: Text(isSignUp ? "Sign Up" : "Authenticate"),
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Text("Or", style: TextStyle(color: Colors.black54)),
+                    ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.red),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                      icon: const Icon(Icons.g_mobiledata, color: Colors.red, size: 30),
+                      label: const Text(
+                        "Sign in with GMail",
+                        style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: _handleGoogleSignIn,
+                    ),
+                  ],
                 ),
-                onPressed: _handleLogin,
-                child: const Text("LOGIN"),
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
