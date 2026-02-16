@@ -65,6 +65,12 @@ class _HomeScreenState extends State<HomeScreen> {
             elevation: 4,
             child: InkWell(
               onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MovieDetailScreen(movie: movie),
+                  ),
+                );
               },
               child: Padding(
                 padding: EdgeInsets.all(12.0),

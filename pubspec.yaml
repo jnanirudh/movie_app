@@ -25,6 +25,8 @@ dependencies:
 
   cupertino_icons: ^1.0.8 # Cupertino Icons font to your application for iOS style icons.
   google_sign_in: ^6.2.2
+  shared_preferences: ^2.2.2
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:

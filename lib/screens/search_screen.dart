@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/tmdb_service.dart';
+import 'package:movie_app/services/tmdb_service.dart';
 import '../models/movie.dart';
 import 'movieDetail_screen.dart';
 
@@ -42,6 +42,7 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Theme.of(context).primaryColor,
         title: _isSearching
             ? TextField(
           controller: _searchController,
@@ -52,6 +53,7 @@ class _SearchScreenState extends State<SearchScreen> {
             hintStyle: TextStyle(color: Colors.white60),
           ),
           style: TextStyle(color: Colors.white, fontSize: 18),
+          cursorColor: Colors.white,
           onChanged: _searchMovies,
         )
             : Text('Search Movies'),
