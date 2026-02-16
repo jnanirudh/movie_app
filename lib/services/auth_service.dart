@@ -5,7 +5,6 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email'],
-    serverClientId: '868129366108-9amh2lgg6daevaekc3738788l674haso.apps.googleusercontent.com',
   );
 
   // Get current user
@@ -17,6 +16,8 @@ class AuthService {
   // Sign in with Google
   Future<User?> signInWithGoogle() async {
     try {
+      await _googleSignIn.signOut();
+
       // Trigger the Google Sign-In flow
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
@@ -37,23 +38,33 @@ class AuthService {
 
       // Sign in to Firebase with the Google credential
       final UserCredential userCredential = await _auth.signInWithCredential(credential);
+
+      print('Successfully signed in with Google: ${userCredential.user?.email}');
       return userCredential.user;
+    } on FirebaseAuthException catch (e) {
+      print('FirebaseAuthException during Google Sign-In: ${e.code} - ${e.message}');
+      rethrow;
     } catch (e) {
       print('Error signing in with Google: $e');
-      return null;
+      rethrow;
     }
   }
 
   // Sign in with email and password
   Future<User?> signInWithEmailPassword(String email, String password) async {
     try {
+      print('Attempting to sign in with email: $email');
       final UserCredential userCredential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
+      print('Successfully signed in: ${userCredential.user?.email}');
       return userCredential.user;
     } on FirebaseAuthException catch (e) {
-      print('Error signing in with email/password: ${e.code}');
+      print('FirebaseAuthException during sign in: ${e.code} - ${e.message}');
+      rethrow;
+    } catch (e) {
+      print('Unexpected error during sign in: $e');
       rethrow;
     }
   }
@@ -61,22 +72,44 @@ class AuthService {
   // Register with email and password
   Future<User?> registerWithEmailPassword(String email, String password) async {
     try {
+      print('Attempting to register with email: $email');
       final UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
+      print('Successfully registered: ${userCredential.user?.email}');
       return userCredential.user;
     } on FirebaseAuthException catch (e) {
-      print('Error registering: ${e.code}');
+      print('FirebaseAuthException during registration: ${e.code} - ${e.message}');
+      rethrow;
+    } catch (e) {
+      print('Unexpected error during registration: $e');
       rethrow;
     }
   }
 
   // Sign out
   Future<void> signOut() async {
-    await Future.wait([
-      _auth.signOut(),
-      _googleSignIn.signOut(),
-    ]);
+    try {
+      await Future.wait([
+        _auth.signOut(),
+        _googleSignIn.signOut(),
+      ]);
+      print('Successfully signed out');
+    } catch (e) {
+      print('Error signing out: $e');
+      rethrow;
+    }
+  }
+
+  // Reset password
+  Future<void> resetPassword(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      print('Password reset email sent to: $email');
+    } on FirebaseAuthException catch (e) {
+      print('Error sending password reset email: ${e.code} - ${e.message}');
+      rethrow;
+    }
   }
 }
