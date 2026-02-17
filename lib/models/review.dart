@@ -27,9 +27,11 @@ class Review {
     return Review(
       userId: json['userId'],
       userName: json['userName'],
-      rating: json['rating'],
+      rating: (json['rating'] as num).toDouble(),
       comment: json['comment'],
-      timestamp: DateTime.parse(json['timestamp']),
+      timestamp: json['timestamp'] is String
+          ? DateTime.parse(json['timestamp'])
+          : (json['timestamp'] as dynamic).toDate(),
     );
   }
 }

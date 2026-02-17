@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import '../models/movie.dart'; //gets movie data
-import '../models/review.dart'; //gets review data
+import 'package:firebase_auth/firebase_auth.dart';
+import '../models/movie.dart';
+import '../models/review.dart';
 import '../services/tmdb_service.dart';
 import '../services/review_service.dart';
 import '../services/watchlist_service.dart';
@@ -25,7 +26,6 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
   bool _isBookmarked = false;
   bool _isDescriptionExpanded = false;
 
-  List<Review> _reviews = [];
   Review? _userReview;
   String? _currentUserId;
 
@@ -33,7 +33,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
   void initState() {
     super.initState();
     _loadMovieDetails();
-    _loadReviews();
+    _loadUserData();
     _checkWatchlistStatus();
   }
 
@@ -53,6 +53,12 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
     }
   }
 
+  Future<void> _loadUserData() async {
+    _currentUserId = await _reviewService.getCurrentUserId();
+    _userReview = await _reviewService.getUserReview(widget.movie.id, _currentUserId!);
+    setState(() {});
+  }
+
   Future<void> _checkWatchlistStatus() async {
     bool inWatchlist = await _watchlistService.isInWatchlist(widget.movie.id);
     setState(() {
@@ -63,18 +69,12 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
   Future<void> _toggleWatchlist() async {
     if (_isBookmarked) {
       await _watchlistService.removeFromWatchlist(widget.movie.id);
-
-      // Also remove from saved movies
       List<Movie> watchlistMovies = await _watchlistService.getWatchlistMovies();
       watchlistMovies.removeWhere((m) => m.id == widget.movie.id);
       await _watchlistService.saveWatchlistMovies(watchlistMovies);
     } else {
       await _watchlistService.addToWatchlist(widget.movie.id);
-
-      // Save the full movie object for display in profile
       List<Movie> watchlistMovies = await _watchlistService.getWatchlistMovies();
-
-      // Check if movie is already in the list to avoid duplicates
       if (!watchlistMovies.any((m) => m.id == widget.movie.id)) {
         watchlistMovies.add(_detailedMovie ?? widget.movie);
         await _watchlistService.saveWatchlistMovies(watchlistMovies);
@@ -87,28 +87,10 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(_isBookmarked
-            ? 'Added to watchlist'
-            : 'Removed from watchlist'),
+        content: Text(_isBookmarked ? 'Added to watchlist' : 'Removed from watchlist'),
         duration: Duration(seconds: 1),
       ),
     );
-  }
-
-  Future<void> _loadReviews() async {
-    _currentUserId = await _reviewService.getCurrentUserId();
-    _userReview = await _reviewService.getUserReview(widget.movie.id, _currentUserId!);
-
-    List<Review> allReviews = await _reviewService.getReviews(widget.movie.id);
-
-    setState(() {
-      if (_userReview != null) {
-        _reviews = [_userReview!];
-        _reviews.addAll(allReviews.where((r) => r.userId != _currentUserId));
-      } else {
-        _reviews = allReviews;
-      }
-    });
   }
 
   Widget _buildStarRating(double rating) {
@@ -134,9 +116,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
 
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(
-          title: Text(widget.movie.title),
-        ),
+        appBar: AppBar(title: Text(widget.movie.title)),
         body: Center(child: CircularProgressIndicator()),
       );
     }
@@ -151,9 +131,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
           ),
           IconButton(
             icon: Icon(Icons.grid_view),
-            onPressed: () {
-              // TODO: Implement grid view functionality
-            },
+            onPressed: () {},
           ),
         ],
       ),
@@ -163,11 +141,10 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header Section with Poster and Info
+              // Header Section
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Movie Poster
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: Image.network(
@@ -175,55 +152,56 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                       width: 140,
                       height: 210,
                       fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          width: 140,
+                          height: 210,
+                          color: Colors.grey[300],
+                          child: Icon(Icons.movie, size: 60),
+                        );
+                      },
                     ),
                   ),
                   SizedBox(width: 16),
-
-                  // Movie Info
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           movie.title,
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         SizedBox(height: 8),
                         if (movie.releaseDate != null)
-                          Text(
-                            movie.releaseDate!,
-                            style: TextStyle(fontSize: 16, color: Colors.grey[700]),
-                          ),
+                          Text(movie.releaseDate!, style: TextStyle(fontSize: 14, color: Colors.grey[700])),
                         SizedBox(height: 4),
                         if (movie.certification != null && movie.certification!.isNotEmpty)
-                          Text(
-                            movie.certification!,
-                            style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(movie.certification!, style: TextStyle(fontSize: 12)),
                           ),
                         SizedBox(height: 4),
-                        Text(
-                          movie.getGenres(),
-                          style: TextStyle(fontSize: 16, color: Colors.grey[700]),
-                        ),
+                        Text(movie.getGenres(), style: TextStyle(fontSize: 14, color: Colors.grey[700])),
                         SizedBox(height: 4),
-                        Text(
-                          movie.getFormattedRuntime(),
-                          style: TextStyle(fontSize: 16, color: Colors.grey[700]),
-                        ),
+                        Text(movie.getFormattedRuntime(), style: TextStyle(fontSize: 14, color: Colors.grey[700])),
                         SizedBox(height: 12),
-                        // Add to Watchlist Button
                         ElevatedButton.icon(
                           onPressed: _toggleWatchlist,
                           icon: Icon(
                             _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
                             size: 18,
                           ),
-                          label: Text('Add to WatchList'),
+                          label: Text(_isBookmarked ? 'In Watchlist' : 'Add to Watchlist'),
                           style: ElevatedButton.styleFrom(
                             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            backgroundColor: _isBookmarked ? Colors.green : null,
+                            foregroundColor: _isBookmarked ? Colors.white : null,
                           ),
                         ),
                       ],
@@ -241,10 +219,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                   SizedBox(width: 8),
                   Text(
                     '${movie.rating.toStringAsFixed(1)}/10',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -252,13 +227,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
               SizedBox(height: 20),
 
               // Description Box
-              Text(
-                'Description',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              Text('Description', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               SizedBox(height: 8),
               Container(
                 padding: EdgeInsets.all(16),
@@ -286,10 +255,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                           padding: EdgeInsets.only(top: 8),
                           child: Text(
                             _isDescriptionExpanded ? '...less' : '...more',
-                            style: TextStyle(
-                              color: Colors.blue,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),
@@ -299,35 +265,20 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
 
               SizedBox(height: 20),
 
-              // Director / Production House
+              // Director
               if (movie.director != null)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Director',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    Text('Director', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     SizedBox(height: 4),
-                    Text(
-                      movie.director!,
-                      style: TextStyle(fontSize: 15, color: Colors.grey[700]),
-                    ),
+                    Text(movie.director!, style: TextStyle(fontSize: 15, color: Colors.grey[700])),
                     SizedBox(height: 20),
                   ],
                 ),
 
               // OTT Section
-              Text(
-                'OTT:',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              Text('OTT:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               SizedBox(height: 8),
               Container(
                 padding: EdgeInsets.all(16),
@@ -336,28 +287,20 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  'Streaming platforms information coming soon',
+                  'Streaming platforms coming soon',
                   style: TextStyle(fontSize: 15, color: Colors.grey[600]),
                 ),
               ),
 
               SizedBox(height: 20),
 
-              // Reviews Section
+              // Reviews Section Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Reviews',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  Text('Reviews', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   ElevatedButton.icon(
-                    onPressed: () {
-                      _showWriteReviewDialog(context);
-                    },
+                    onPressed: () => _showWriteReviewDialog(context),
                     icon: Icon(Icons.rate_review, size: 18),
                     label: Text(_userReview == null ? 'Write Review' : 'Edit Review'),
                     style: ElevatedButton.styleFrom(
@@ -368,37 +311,64 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
               ),
               SizedBox(height: 12),
 
-              // Display Reviews
-              if (_reviews.isEmpty)
-                Container(
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey[300]!),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Center(
-                    child: Text(
-                      'No reviews yet. Be the first to review!',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                  ),
-                )
-              else
-                Column(
-                  children: _reviews.map((review) {
-                    bool isUserReview = review.userId == _currentUserId;
-                    return Padding(
-                      padding: EdgeInsets.only(bottom: 12),
-                      child: _buildReviewCard(
-                        review.userName,
-                        review.rating,
-                        review.comment,
-                        isUserReview: isUserReview,
-                        onDelete: isUserReview ? () => _deleteReview() : null,
+              // Reviews List using StreamBuilder for real-time updates
+              StreamBuilder<List<Review>>(
+                stream: _reviewService.getReviewsStream(widget.movie.id),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(child: CircularProgressIndicator());
+                  }
+
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Text(
+                        'Error loading reviews',
+                        style: TextStyle(color: Colors.grey[600]),
                       ),
                     );
-                  }).toList(),
-                ),
+                  }
+
+                  final reviews = snapshot.data ?? [];
+
+                  if (reviews.isEmpty) {
+                    return Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'No reviews yet. Be the first to review!',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                      ),
+                    );
+                  }
+
+                  // Sort: current user's review always first
+                  final sortedReviews = [...reviews];
+                  sortedReviews.sort((a, b) {
+                    if (a.userId == _currentUserId) return -1;
+                    if (b.userId == _currentUserId) return 1;
+                    return b.timestamp.compareTo(a.timestamp);
+                  });
+
+                  return Column(
+                    children: sortedReviews.map((review) {
+                      bool isUserReview = review.userId == _currentUserId;
+                      return Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: _buildReviewCard(
+                          review,
+                          isUserReview: isUserReview,
+                          onDelete: isUserReview ? () => _deleteReview() : null,
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -407,9 +377,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
   }
 
   Widget _buildReviewCard(
-      String userName,
-      double rating,
-      String comment, {
+      Review review, {
         bool isUserReview = false,
         VoidCallback? onDelete,
       }) {
@@ -429,46 +397,56 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Text(
-                    userName,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+              // Username and "You" badge
+              Expanded(
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: isUserReview ? Colors.blue : Colors.grey[400],
+                      child: Text(
+                        review.userName[0].toUpperCase(),
+                        style: TextStyle(color: Colors.white, fontSize: 14),
+                      ),
                     ),
-                  ),
-                  if (isUserReview)
-                    Padding(
-                      padding: EdgeInsets.only(left: 8),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.blue,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'You',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                    SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        review.userName,
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (isUserReview)
+                      Padding(
+                        padding: EdgeInsets.only(left: 8),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.blue,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            'You',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
+              // Rating and delete button
               Row(
                 children: [
                   Icon(Icons.star, color: Colors.amber, size: 20),
                   SizedBox(width: 4),
                   Text(
-                    rating.toString(),
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    review.rating.toStringAsFixed(1),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   if (onDelete != null)
                     IconButton(
@@ -483,12 +461,21 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
           ),
           SizedBox(height: 8),
           Text(
-            comment,
+            review.comment,
             style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+          ),
+          SizedBox(height: 4),
+          Text(
+            _formatDate(review.timestamp),
+            style: TextStyle(fontSize: 12, color: Colors.grey[500]),
           ),
         ],
       ),
     );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
   }
 
   Future<void> _deleteReview() async {
@@ -512,7 +499,12 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
 
     if (confirm == true) {
       await _reviewService.deleteReview(widget.movie.id, _currentUserId!);
-      await _loadReviews();
+      await ReviewedMoviesService.deleteReviewedMovie(widget.movie.id, _currentUserId!);
+
+      setState(() {
+        _userReview = null;
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Review deleted')),
       );
@@ -569,9 +561,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
+                  onPressed: () => Navigator.of(context).pop(),
                   child: Text('Cancel'),
                 ),
                 ElevatedButton(
@@ -583,24 +573,32 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                       return;
                     }
 
+                    final user = FirebaseAuth.instance.currentUser;
+                    String userName = user?.displayName ??
+                        user?.email?.split('@')[0] ??
+                        'Anonymous';
+
                     Review newReview = Review(
                       userId: _currentUserId!,
-                      userName: 'You',
+                      userName: userName,
                       rating: userRating,
                       comment: reviewController.text.trim(),
                       timestamp: DateTime.now(),
                     );
 
                     await _reviewService.addReview(widget.movie.id, newReview);
+                    await ReviewedMoviesService.saveReviewedMovie(
+                      _detailedMovie ?? widget.movie,
+                      _currentUserId!,
+                    );
 
-                    // Save the reviewed movie for profile display
-                    await ReviewedMoviesService.saveReviewedMovie(_detailedMovie ?? widget.movie, _currentUserId!);
-
-                    await _loadReviews();
+                    setState(() {
+                      _userReview = newReview;
+                    });
 
                     Navigator.of(context).pop();
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Review ${_userReview == null ? 'submitted' : 'updated'}!')),
+                      SnackBar(content: Text('Review submitted!')),
                     );
                   },
                   child: Text('Submit'),
