@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-// Following are the accessible screens
 import 'home_screen.dart';
 import 'search_screen.dart';
 import 'profile_screen.dart';
@@ -12,16 +11,27 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = [
-    HomeScreen(),
-    SearchScreen(),
-    ProfileScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    // Build screen based on current index (creates fresh instance each time)
+    Widget currentScreen;
+
+    switch (_currentIndex) {
+      case 0:
+        currentScreen = HomeScreen();
+        break;
+      case 1:
+        currentScreen = SearchScreen();
+        break;
+      case 2:
+        currentScreen = ProfileScreen();
+        break;
+      default:
+        currentScreen = HomeScreen();
+    }
+
     return Scaffold(
-      body: _screens[_currentIndex],
+      body: currentScreen,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {
