@@ -5,70 +5,85 @@ import '../models/review.dart';
 class ReviewService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Get current user ID from Firebase
   Future<String> getCurrentUserId() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) return user.uid;
     throw Exception('No user logged in');
   }
 
-  // Get current user's display name or email
   String getCurrentUserName() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return 'Anonymous';
-    // Use display name if available, otherwise use email prefix
     return user.displayName ?? user.email?.split('@')[0] ?? 'Anonymous';
   }
 
-  // Get ALL reviews for a movie (from all users)
-  Stream<List<Review>> getReviewsStream(int movieId) {
-    return _firestore
-        .collection('reviews')
-        .where('movieId', isEqualTo: movieId)
-        .orderBy('timestamp', descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        final data = doc.data();
-        return Review(
-          userId: data['userId'],
-          userName: data['userName'],
-          rating: (data['rating'] as num).toDouble(),
-          comment: data['comment'],
-          timestamp: (data['timestamp'] as Timestamp).toDate(),
-        );
-      }).toList();
-    });
-  }
-
-  // Get reviews as a Future (one-time fetch)
+  // Get ALL reviews for a movie
   Future<List<Review>> getReviews(int movieId) async {
     try {
+      print('🔍 Fetching reviews for movieId: $movieId');
       final snapshot = await _firestore
           .collection('reviews')
           .where('movieId', isEqualTo: movieId)
-          .orderBy('timestamp', descending: true)
           .get();
 
-      return snapshot.docs.map((doc) {
+      print('📦 Docs found: ${snapshot.docs.length}');
+
+      final reviews = snapshot.docs.map((doc) {
         final data = doc.data();
         return Review(
-          userId: data['userId'],
-          userName: data['userName'],
+          userId: data['userId'] ?? '',
+          userName: data['userName'] ?? 'Anonymous',
           rating: (data['rating'] as num).toDouble(),
-          comment: data['comment'],
-          timestamp: (data['timestamp'] as Timestamp).toDate(),
+          comment: data['comment'] ?? '',
+          timestamp: data['timestamp'] != null
+              ? (data['timestamp'] as Timestamp).toDate()
+              : DateTime.now(),
         );
       }).toList();
+
+      // Sort by most recent
+      reviews.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return reviews;
     } catch (e) {
-      print('Error getting reviews: $e');
+      print('❌ Error getting reviews: $e');
       return [];
     }
   }
 
+  // Get all reviews by a specific user with movie info
+  Future<List<Map<String, dynamic>>> getUserReviews(String userId) async {
+    try {
+      print('🔍 Getting reviews for userId: $userId');
+      final snapshot = await _firestore
+          .collection('reviews')
+          .where('userId', isEqualTo: userId)
+          .get();
+
+      print('✅ Found ${snapshot.docs.length} reviews');
+
+      final reviews = snapshot.docs.map((doc) => doc.data()).toList();
+
+      // Sort by most recent
+      reviews.sort((a, b) {
+        final aTime = a['timestamp'] as Timestamp?;
+        final bTime = b['timestamp'] as Timestamp?;
+        if (aTime == null || bTime == null) return 0;
+        return bTime.compareTo(aTime);
+      });
+
+      return reviews;
+    } catch (e) {
+      print('❌ Error getting user reviews: $e');
+      return [];
+    }
+  }
+
+  // Add or update review
   Future<void> addReview(int movieId, Review review) async {
     try {
+      print('📝 Adding review for movieId: $movieId by ${review.userId}');
       String docId = '${review.userId}_$movieId';
+
       await _firestore.collection('reviews').doc(docId).set({
         'movieId': movieId,
         'userId': review.userId,
@@ -77,13 +92,15 @@ class ReviewService {
         'comment': review.comment,
         'timestamp': FieldValue.serverTimestamp(),
       });
+
+      print('✅ Review added: $docId');
     } catch (e) {
-      print('Error adding review: $e');
+      print('❌ Error adding review: $e');
       rethrow;
     }
   }
 
-  // Get user's review for a specific movie
+  // Get specific user review for a movie
   Future<Review?> getUserReview(int movieId, String userId) async {
     try {
       String docId = '${userId}_$movieId';
@@ -93,42 +110,29 @@ class ReviewService {
 
       final data = doc.data()!;
       return Review(
-        userId: data['userId'],
-        userName: data['userName'],
+        userId: data['userId'] ?? '',
+        userName: data['userName'] ?? 'Anonymous',
         rating: (data['rating'] as num).toDouble(),
-        comment: data['comment'],
-        timestamp: (data['timestamp'] as Timestamp).toDate(),
+        comment: data['comment'] ?? '',
+        timestamp: data['timestamp'] != null
+            ? (data['timestamp'] as Timestamp).toDate()
+            : DateTime.now(),
       );
     } catch (e) {
-      print('Error getting user review: $e');
+      print('❌ Error getting user review: $e');
       return null;
     }
   }
 
-  // Delete user's review
+  // Delete review
   Future<void> deleteReview(int movieId, String userId) async {
     try {
       String docId = '${userId}_$movieId';
       await _firestore.collection('reviews').doc(docId).delete();
+      print('✅ Review deleted: $docId');
     } catch (e) {
-      print('Error deleting review: $e');
+      print('❌ Error deleting review: $e');
       rethrow;
-    }
-  }
-
-  // Get all reviews by a specific user (for profile screen)
-  Future<List<Map<String, dynamic>>> getUserReviews(String userId) async {
-    try {
-      final snapshot = await _firestore
-          .collection('reviews')
-          .where('userId', isEqualTo: userId)
-          .orderBy('timestamp', descending: true)
-          .get();
-
-      return snapshot.docs.map((doc) => doc.data()).toList();
-    } catch (e) {
-      print('Error getting user reviews: $e');
-      return [];
     }
   }
 }

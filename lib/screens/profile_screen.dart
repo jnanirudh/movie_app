@@ -37,15 +37,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final user = FirebaseAuth.instance.currentUser;
       _userId = user?.uid;
 
-      if (user != null && user.email != null) {
-        setState(() {
+      setState(() {
+        if (user != null && user.email != null) {
           _userName = user.email!.split('@')[0];
-        });
-      }
+        } else {
+          _userName = 'Movie Enthusiast';
+        }
+      });
 
+      // Load watchlist
       _watchlistMovies = await _watchlistService.getWatchlistMovies();
-      await _loadUserReviews();
 
+      // Load user reviews from Firestore
+      await _loadUserReviews();
     } catch (e) {
       print('Error loading profile data: $e');
     } finally {
@@ -54,27 +58,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadUserReviews() async {
-    _userReviews = [];
+    if (_userId == null) return;
 
-    // Get all reviewed movies from the service
-    Map<int, Movie> reviewedMovies = await _getReviewedMovies();
+    try {
+      print('Loading reviews for user: $_userId');
+      final reviewMaps = await _reviewService.getUserReviews(_userId!);
+      print('Found ${reviewMaps.length} reviews');
 
-    for (var entry in reviewedMovies.entries) {
-      int movieId = entry.key;
-      Movie movie = entry.value;
+      List<MovieReviewPair> pairs = [];
 
-      Review? review = await _reviewService.getUserReview(movieId, _userId!);
-      if (review != null) {
-        _userReviews.add(MovieReviewPair(movie: movie, review: review));
+      final reviewedMovies =
+      await ReviewedMoviesService.getReviewedMovies(_userId!);
+      print('Reviewed movies tracked: ${reviewedMovies.length}');
+
+      for (var reviewMap in reviewMaps) {
+        try {
+          int movieId = reviewMap['movieId'];
+          Movie? movie = reviewedMovies[movieId];
+
+          if (movie == null) {
+            try {
+              movie =
+                  _watchlistMovies.firstWhere((m) => m.id == movieId);
+            } catch (e) {
+              print(
+                  'Movie $movieId not found in watchlist or reviewed movies');
+            }
+          }
+
+          if (movie != null) {
+            final review = Review(
+              userId: reviewMap['userId'] ?? '',
+              userName: reviewMap['userName'] ?? 'Anonymous',
+              rating: (reviewMap['rating'] as num).toDouble(),
+              comment: reviewMap['comment'] ?? '',
+              timestamp: reviewMap['timestamp'] != null
+                  ? (reviewMap['timestamp'] as dynamic).toDate()
+                  : DateTime.now(),
+            );
+            pairs.add(MovieReviewPair(movie: movie, review: review));
+            print('Added review pair for: ${movie.title}');
+          } else {
+            print('Could not find movie data for movieId: $movieId');
+          }
+        } catch (e) {
+          print('Error processing review: $e');
+        }
       }
+
+      setState(() {
+        _userReviews = pairs;
+      });
+    } catch (e) {
+      print('Error loading user reviews: $e');
     }
-
-    // Sort by most recent
-    _userReviews.sort((a, b) => b.review.timestamp.compareTo(a.review.timestamp));
-  }
-
-  Future<Map<int, Movie>> _getReviewedMovies() async {
-    return await ReviewedMoviesService.getReviewedMovies(_userId!);
   }
 
   void _showQRCode() {
@@ -123,13 +160,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           IconButton(
             icon: Icon(Icons.settings),
             onPressed: () async {
-              // Navigate to settings screen
               final result = await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => SettingsScreen()),
               );
-
-              // If user logged out, reload profile data
               if (result == true) {
                 _loadProfileData();
               }
@@ -152,16 +186,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 padding: EdgeInsets.symmetric(vertical: 20),
                 child: Column(
                   children: [
-                    // Profile Picture with QR Code button
                     Stack(
                       children: [
                         CircleAvatar(
                           radius: 60,
                           backgroundColor: Colors.blue,
-                          child: Icon(
-                            Icons.person,
-                            size: 60,
-                            color: Colors.white,
+                          child: Text(
+                            _userName.isNotEmpty
+                                ? _userName[0].toUpperCase()
+                                : 'U',
+                            style: TextStyle(
+                              fontSize: 48,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         Positioned(
@@ -187,7 +225,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                     SizedBox(height: 16),
-                    // Username
                     Text(
                       _userName,
                       style: TextStyle(
@@ -197,9 +234,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     SizedBox(height: 4),
                     Text(
-                      'ID: ${_userId?.substring(0, 12)}...',
+                      FirebaseAuth.instance.currentUser?.email ?? '',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 14,
                         color: Colors.grey[600],
                       ),
                     ),
@@ -363,7 +400,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Movie Thumbnail
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: Image.network(
@@ -382,8 +418,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             SizedBox(width: 16),
-
-            // Movie Info and Rating
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -398,8 +432,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   SizedBox(height: 8),
-
-                  // Star Rating
                   Row(
                     children: List.generate(5, (index) {
                       return Icon(
@@ -412,7 +444,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     }),
                   ),
                   SizedBox(height: 8),
-
                   Text(
                     review.comment,
                     maxLines: 3,
