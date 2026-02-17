@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/movie.dart';
 import '../models/review.dart';
 import '../services/watchlist_service.dart';
@@ -32,20 +33,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadProfileData() async {
     setState(() => _isLoading = true);
 
-    // Get user ID
-    _userId = await _reviewService.getCurrentUserId();
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      _userId = user?.uid;
 
-    setState(() {
-      _userName = 'User_${_userId!.substring(_userId!.length - 8)}';
-    });
+      if (user != null && user.email != null) {
+        setState(() {
+          _userName = user.email!.split('@')[0];
+        });
+      }
 
-    // Load watchlist
-    _watchlistMovies = await _watchlistService.getWatchlistMovies();
+      _watchlistMovies = await _watchlistService.getWatchlistMovies();
+      await _loadUserReviews();
 
-    // Load user reviews
-    await _loadUserReviews();
-
-    setState(() => _isLoading = false);
+    } catch (e) {
+      print('Error loading profile data: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _loadUserReviews() async {
