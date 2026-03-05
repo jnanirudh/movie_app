@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import '../services/auth_service.dart';
+import '../services/api_service.dart';
 import 'main_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -10,118 +9,27 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final AuthService _authService = AuthService();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-  bool _isLoading = false;
-  bool _isRegisterMode = false;
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _tabController.dispose();
     super.dispose();
-  }
-
-  Future<void> _handleEmailPasswordAuth() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      String email = _emailController.text.trim();
-      String password = _passwordController.text;
-
-      if (_isRegisterMode) {
-        // Registration flow
-        User? user = await _authService.registerWithEmailPassword(email, password);
-
-        if (user != null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Registration successful!')),
-          );
-          _navigateToHome();
-        }
-      } else {
-        // Login flow - Direct attempt (fixes the loop)
-        User? user = await _authService.signInWithEmailPassword(email, password);
-
-        if (user != null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Signed in successfully!')),
-          );
-          _navigateToHome();
-        }
-      }
-    } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_getErrorMessage(e.code))),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('An unexpected error occurred.')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _handleGoogleSignIn() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final User? user = await _authService.signInWithGoogle();
-
-      if (user != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Signed in with Google successfully!')),
-        );
-        _navigateToHome();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Google sign-in failed: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
   }
 
   void _navigateToHome() {
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => MainScreen()), // Removed 'const' here
+      MaterialPageRoute(builder: (_) => MainScreen()),
           (route) => false,
     );
-  }
-
-  String _getErrorMessage(String code) {
-    switch (code) {
-      case 'user-not-found':
-      case 'invalid-credential':
-        return _isRegisterMode
-            ? 'An account already exists with this email.'
-            : 'Invalid email or password. Please register if you don\'t have an account.';
-      case 'wrong-password':
-        return 'Wrong password provided.';
-      case 'email-already-in-use':
-        return 'An account already exists with this email.';
-      case 'weak-password':
-        return 'Password should be at least 6 characters.';
-      case 'invalid-email':
-        return 'Invalid email address.';
-      case 'user-disabled':
-        return 'This account has been disabled.';
-      default:
-        return 'An error occurred. Please try again.';
-    }
   }
 
   @override
@@ -139,122 +47,49 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Icon(Icons.movie, size: 100, color: Colors.white),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Movie Browser',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Your personal movie collection',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16, color: Colors.white70),
-                    ),
-                    const SizedBox(height: 48),
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-                      child: Column(
-                        children: [
-                          TextFormField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            style: const TextStyle(color: Colors.black),
-                            decoration: InputDecoration(
-                              labelText: 'Email',
-                              labelStyle: TextStyle(color: Colors.grey[700]),
-                              hintText: 'Works with any email',
-                              hintStyle: TextStyle(color: Colors.grey[400], fontSize: 12),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                              prefixIcon: Icon(Icons.email, color: Colors.blue[700]),
-                              filled: true,
-                              fillColor: Colors.grey[50],
-                            ),
-                            validator: (value) => (value == null || !value.contains('@')) ? 'Please enter a valid email' : null,
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _passwordController,
-                            obscureText: true,
-                            style: const TextStyle(color: Colors.black),
-                            decoration: InputDecoration(
-                              labelText: 'Password',
-                              labelStyle: TextStyle(color: Colors.grey[700]),
-                              hintText: _isRegisterMode ? 'At least 6 characters' : 'Enter your password',
-                              hintStyle: TextStyle(color: Colors.grey[400], fontSize: 12),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                              prefixIcon: Icon(Icons.lock, color: Colors.blue[700]),
-                              filled: true,
-                              fillColor: Colors.grey[50],
-                            ),
-                            validator: (value) {
-                              if (value == null || value.isEmpty) return 'Please enter your password';
-                              if (_isRegisterMode && value.length < 6) return 'Password must be at least 6 characters';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 24),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 50,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _handleEmailPasswordAuth,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue[700],
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              child: _isLoading
-                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                  : Text(_isRegisterMode ? 'Register' : 'Login', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
+              child: Column(
+                children: [
+                  const Icon(Icons.movie, size: 80, color: Colors.white),
+                  const SizedBox(height: 12),
+                  const Text('Movie Browser',
+                      style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white)),
+                  const SizedBox(height: 4),
+                  const Text('Your personal movie collection',
+                      style: TextStyle(fontSize: 16, color: Colors.white70)),
+                  const SizedBox(height: 32),
+                  Container(
+                    decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16)),
+                    child: Column(
+                      children: [
+                        TabBar(
+                          controller: _tabController,
+                          labelColor: Colors.blue[700],
+                          unselectedLabelColor: Colors.grey,
+                          indicatorColor: Colors.blue[700],
+                          tabs: const [
+                            Tab(text: 'Login'),
+                            Tab(text: 'Register'),
+                          ],
+                        ),
+                        SizedBox(
+                          height: 440,
+                          child: TabBarView(
+                            controller: _tabController,
                             children: [
-                              Expanded(child: Divider(color: Colors.grey[400])),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                child: Text('OR', style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.bold)),
-                              ),
-                              Expanded(child: Divider(color: Colors.grey[400])),
+                              _LoginTab(onSuccess: _navigateToHome),
+                              _RegisterTab(onSuccess: _navigateToHome),
                             ],
                           ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 50,
-                            child: OutlinedButton.icon(
-                              onPressed: _isLoading ? null : _handleGoogleSignIn,
-                              icon: Icon(Icons.login, color: Colors.blue[700]),
-                              label: Text('Sign in with Google', style: TextStyle(fontSize: 16, color: Colors.blue[700])),
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(color: Colors.blue[700]!),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextButton(
-                            onPressed: _isLoading ? null : () => setState(() => _isRegisterMode = !_isRegisterMode),
-                            child: Text(
-                              _isRegisterMode ? 'Already have an account? Login' : "Don't have an account? Register",
-                              style: TextStyle(fontSize: 14, color: Colors.blue[700]),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -262,4 +97,227 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+}
+
+// ─── Login Tab ────────────────────────────────────────────────────────────────
+
+class _LoginTab extends StatefulWidget {
+  final VoidCallback onSuccess;
+  const _LoginTab({required this.onSuccess});
+
+  @override
+  State<_LoginTab> createState() => _LoginTabState();
+}
+
+class _LoginTabState extends State<_LoginTab> {
+  final _identifierController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _identifierController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  bool get _isEmail => _identifierController.text.contains('@');
+
+  Future<void> _login() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+
+    final identifier = _identifierController.text.trim();
+    final error = await ApiService.login(
+      phone: _isEmail ? null : identifier,
+      email: _isEmail ? identifier : null,
+      password: _passwordController.text,
+    );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (error == null) {
+      widget.onSuccess();
+    } else {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Welcome back',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text('Sign in with your email or phone',
+                style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+            const SizedBox(height: 20),
+            TextFormField(
+              controller: _identifierController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: _inputDecoration('Email or Phone number', Icons.person),
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Enter your email or phone number'
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _passwordController,
+              obscureText: true,
+              decoration: _inputDecoration('Password', Icons.lock),
+              validator: (v) =>
+              (v == null || v.isEmpty) ? 'Enter your password' : null,
+            ),
+            const SizedBox(height: 24),
+            _buildButton('Login', _isLoading, _login),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Register Tab ─────────────────────────────────────────────────────────────
+
+class _RegisterTab extends StatefulWidget {
+  final VoidCallback onSuccess;
+  const _RegisterTab({required this.onSuccess});
+
+  @override
+  State<_RegisterTab> createState() => _RegisterTabState();
+}
+
+class _RegisterTabState extends State<_RegisterTab> {
+  final _nameController = TextEditingController();
+  final _identifierController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _identifierController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  bool get _isEmail => _identifierController.text.contains('@');
+
+  Future<void> _register() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+
+    final identifier = _identifierController.text.trim();
+    final error = await ApiService.signup(
+      phone: _isEmail ? null : identifier,
+      email: _isEmail ? identifier : null,
+      password: _passwordController.text,
+      displayName: _nameController.text.trim(),
+    );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (error == null) {
+      widget.onSuccess();
+    } else {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Create account',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text('Sign up with your email or phone',
+                style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+            const SizedBox(height: 20),
+            TextFormField(
+              controller: _nameController,
+              decoration:
+              _inputDecoration('Display Name (optional)', Icons.badge),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _identifierController,
+              keyboardType: TextInputType.emailAddress,
+              decoration:
+              _inputDecoration('Email or Phone number', Icons.alternate_email),
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Enter your email or phone number'
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _passwordController,
+              obscureText: true,
+              decoration:
+              _inputDecoration('Password (min 8 chars)', Icons.lock),
+              validator: (v) => (v == null || v.length < 8)
+                  ? 'Password must be at least 8 characters'
+                  : null,
+            ),
+            const SizedBox(height: 24),
+            _buildButton('Register', _isLoading, _register),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Shared helpers ───────────────────────────────────────────────────────────
+
+InputDecoration _inputDecoration(String label, IconData icon) {
+  return InputDecoration(
+    labelText: label,
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+    prefixIcon: Icon(icon, color: Colors.blue[700]),
+    filled: true,
+    fillColor: Colors.grey[50],
+  );
+}
+
+Widget _buildButton(String label, bool isLoading, VoidCallback onTap) {
+  return SizedBox(
+    width: double.infinity,
+    height: 50,
+    child: ElevatedButton(
+      onPressed: isLoading ? null : onTap,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.blue[700],
+        foregroundColor: Colors.white,
+        shape:
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: isLoading
+          ? const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+              strokeWidth: 2, color: Colors.white))
+          : Text(label,
+          style: const TextStyle(
+              fontSize: 16, fontWeight: FontWeight.bold)),
+    ),
+  );
 }

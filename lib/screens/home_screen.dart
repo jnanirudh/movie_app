@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
-import '../services/tmdb_service.dart';
+import '../services/api_service.dart';
 import '../models/movie.dart';
 import 'movieDetail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final TmdbService _tmdbService = TmdbService();
   final ScrollController _scrollController = ScrollController();
-
   List<Movie> _movies = [];
   int _currentPage = 1;
   bool _isLoading = false;
@@ -21,7 +21,8 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _fetchMovies();
     _scrollController.addListener(() {
-      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 200) {
         _fetchMovies();
       }
     });
@@ -30,15 +31,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _fetchMovies() async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
-
     try {
-      final newMovies = await _tmdbService.fetchMovies(_currentPage);
+      final newMovies = await ApiService.fetchMovies(_currentPage);
       setState(() {
         _movies.addAll(newMovies);
         _currentPage++;
       });
     } catch (e) {
-      print("Error fetching movies: $e");
+      print('Error fetching movies: $e');
     } finally {
       setState(() => _isLoading = false);
     }
@@ -47,33 +47,28 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Movie Browser')),
+      appBar: AppBar(title: const Text('Movie Browser')),
       body: ListView.builder(
         controller: _scrollController,
-        padding: EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(8.0),
         itemCount: _movies.length + (_isLoading ? 1 : 0),
         itemBuilder: (context, index) {
           if (index == _movies.length) {
-            return Center(child: Padding(
-              padding: EdgeInsets.all(8.0),
-              child: CircularProgressIndicator(),
-            ));
+            return const Center(
+                child: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: CircularProgressIndicator()));
           }
           final movie = _movies[index];
           return Card(
-            margin: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+            margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
             elevation: 4,
             child: InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
+              onTap: () => Navigator.push(context,
                   MaterialPageRoute(
-                    builder: (context) => MovieDetailScreen(movie: movie),
-                  ),
-                );
-              },
+                      builder: (_) => MovieDetailScreen(movie: movie))),
               child: Padding(
-                padding: EdgeInsets.all(12.0),
+                padding: const EdgeInsets.all(12.0),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -84,53 +79,38 @@ class _HomeScreenState extends State<HomeScreen> {
                         width: 120,
                         height: 180,
                         fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                            width: 120,
+                            height: 180,
+                            color: Colors.grey[300],
+                            child: const Icon(Icons.movie, size: 50)),
                       ),
                     ),
-                    SizedBox(width: 16),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            movie.title,
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(height: 8),
+                          Text(movie.title,
+                              style: const TextStyle(
+                                  fontSize: 22, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
                           if (movie.releaseDate != null)
-                            Text(
-                              "Release: ${movie.releaseDate}",
+                            Text('Release: ${movie.releaseDate}',
+                                style: TextStyle(
+                                    fontSize: 17, color: Colors.grey[700])),
+                          const SizedBox(height: 8),
+                          Text('Genre: ${movie.getGenres()}',
                               style: TextStyle(
-                                fontSize: 17,
-                                color: Colors.grey[700],
-                              ),
-                            ),
-                          SizedBox(height: 8),
-                          Text(
-                            "Genre: ${movie.getGenres()}",
-                            style: TextStyle(
-                              fontSize: 17,
-                              color: Colors.grey[700],
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            "Language: ${movie.getLanguageName()}",
-                            style: TextStyle(
-                              fontSize: 17,
-                              color: Colors.grey[700],
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            "Rating: ${movie.rating}",
-                            style: TextStyle(
-                              fontSize: 17,
-                              color: Colors.grey[700],
-                            ),
-                          ),
+                                  fontSize: 17, color: Colors.grey[700])),
+                          const SizedBox(height: 8),
+                          Text('Language: ${movie.getLanguageName()}',
+                              style: TextStyle(
+                                  fontSize: 17, color: Colors.grey[700])),
+                          const SizedBox(height: 8),
+                          Text('Rating: ${movie.rating}',
+                              style: TextStyle(
+                                  fontSize: 17, color: Colors.grey[700])),
                         ],
                       ),
                     ),
